@@ -19,16 +19,17 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
     private var captureSessionQueue: dispatch_queue_t
     private var devicePosition: AVCaptureDevicePosition
     private var window:UIWindow??
-    private var videoPreviewView:GLKView
+    var videoPreviewView:GLKView
     private var _eaglContext:EAGLContext!
     private var ciContext:CIContext!
-    private var videoPreviewViewBounds:CGRect
+    private var videoPreviewViewBounds:CGRect = CGRectZero
     private var processBlock:ProcessBlock? = nil
     private var videoDevice: AVCaptureDevice? = nil
     private var captureSession:AVCaptureSession? = nil
     private var preset:String? = AVCaptureSessionPresetMedium
     private var captureOrient:AVCaptureVideoOrientation? = nil
     private var _isRunning:Bool = false
+    var transform : CGAffineTransform = CGAffineTransformIdentity
 
     var isRunning:Bool {
         get {
@@ -141,7 +142,6 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
         
         captureSessionQueue = dispatch_queue_create("capture_session_queue", nil)
         devicePosition = AVCaptureDevicePosition.Back
-    
         self.window = UIApplication.sharedApplication().delegate?.window
         
         _eaglContext = EAGLContext(API: EAGLRenderingAPI.OpenGLES2)
@@ -149,23 +149,24 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
         //            NSLog("Attempting to fall back on OpenGL 2.0")
         //            _eaglContext = EAGLContext(API: EAGLRenderingAPI.OpenGLES2)
         //        }
-        
+        transform = CGAffineTransformIdentity
         if _eaglContext != nil{
             videoPreviewView = GLKView(frame: window!!.bounds, context: _eaglContext)
             videoPreviewView.enableSetNeedsDisplay = false
             
             // because the native video image from the back camera is in UIDeviceOrientationLandscapeLeft (i.e. the home button is on the right), we need to apply a clockwise 90 degree transform so that we can draw the video preview as if we were in a landscape-oriented view; if you're using the front camera and you want to have a mirrored preview (so that the user is seeing themselves in the mirror), you need to apply an additional horizontal flip (by concatenating CGAffineTransformMakeScale(-1.0, 1.0) to the rotation transform)
             
-            var transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
-            if devicePosition == AVCaptureDevicePosition.Front{
-                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
-            }
+            transform = CGAffineTransformRotate(transform, CGFloat(M_PI_2))
+            //if devicePosition == AVCaptureDevicePosition.Front{
+            //    transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+            //}
             videoPreviewView.transform = transform
             videoPreviewView.frame = window!!.bounds
             
             // we make our video preview view a subview of the window, and send it to the back; this makes FHViewController's view (and its UI elements) on top of the video preview, and also makes video preview unaffected by device rotation
             window!!.addSubview(videoPreviewView)
             window!!.sendSubviewToBack(videoPreviewView)
+            
             
             // create the CIContext instance, note that this must be done after _videoPreviewView is properly set up
             ciContext = CIContext(EAGLContext: _eaglContext)
@@ -184,13 +185,16 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
             videoPreviewView = GLKView()
             videoPreviewViewBounds = CGRectZero
         }
-        
+
+    
         super.init()
         
 
     }
     
     private func start_internal()->(){
+        
+        
         
         if (captureSession != nil){
             return; // we are already running, just return
@@ -276,35 +280,34 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
         
         dispatch_async(dispatch_get_main_queue()){
             
-            var transform : CGAffineTransform
+            
             switch (UIDevice.currentDevice().orientation, self.videoDevice!.position){
             case (UIDeviceOrientation.LandscapeRight, AVCaptureDevicePosition.Back):
-                transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
             case (UIDeviceOrientation.LandscapeLeft, AVCaptureDevicePosition.Back):
-                transform = CGAffineTransformIdentity
+                self.transform = CGAffineTransformIdentity
             case (UIDeviceOrientation.LandscapeLeft, AVCaptureDevicePosition.Front):
-                transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
-                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
+                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.LandscapeRight, AVCaptureDevicePosition.Front):
-                transform = CGAffineTransformIdentity
-                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+                self.transform = CGAffineTransformIdentity
+                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.PortraitUpsideDown, AVCaptureDevicePosition.Back):
-                transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
             case (UIDeviceOrientation.PortraitUpsideDown, AVCaptureDevicePosition.Front):
-                transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
-                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
+                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.Portrait, AVCaptureDevicePosition.Back):
-                transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
             case (UIDeviceOrientation.Portrait, AVCaptureDevicePosition.Front):
-                transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
-                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
+                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             default:
-                transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
+                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
             }
             
-            self.videoPreviewView.transform = transform
+            self.videoPreviewView.transform = self.transform
             self.videoPreviewView.frame = self.window!!.bounds
-            
         }
     }
     
