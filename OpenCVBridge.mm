@@ -16,7 +16,8 @@ using namespace cv;
 
 @interface OpenCVBridge()
 @property (nonatomic) cv::Mat image;
-
+@property (strong,nonatomic) CIImage* frameInput;
+@property (nonatomic) CGRect bounds;
 @end
 
 @implementation OpenCVBridge
@@ -45,6 +46,8 @@ using namespace cv;
     
     //get face bounds and copy over smaller face image as CIIMage
     //CGRect faceRect = faceFeature.bounds;
+    _frameInput = ciFrameImage; // save this for later
+    _bounds = faceRect;
     CIImage *faceImage = [ciFrameImage imageByCroppingToRect:faceRect];
     CGImageRef faceImageCG = [context createCGImage:faceImage fromRect:faceRect];
     
@@ -101,9 +104,55 @@ using namespace cv;
                                         NULL,                                           // Decode
                                         false,                                          // Should interpolate
                                         kCGRenderingIntentDefault);                     // Intent
+    
     // do the copy inside of the object instantiation for retImage
     CIImage* retImage = [[CIImage alloc]initWithCGImage:imageRef];
     
+    // clean up
+    CGImageRelease(imageRef);
+    CGDataProviderRelease(provider);
+    CGColorSpaceRelease(colorSpace);
+    
+    return retImage;
+}
+
+-(CIImage*)getImageComposite{
+    // convert back
+    // setup NS byte buffer using the data from the cvMat to show
+    NSData *data = [NSData dataWithBytes:_image.data
+                                  length:_image.elemSize() * _image.total()];
+    
+    CGColorSpaceRef colorSpace;
+    if (_image.elemSize() == 1) {
+        colorSpace = CGColorSpaceCreateDeviceGray();
+    } else {
+        colorSpace = CGColorSpaceCreateDeviceRGB();
+    }
+    
+    // setup buffering object
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
+    
+    // setup the copy to go from CPU to GPU
+    CGImageRef imageRef = CGImageCreate(_image.cols,                                     // Width
+                                        _image.rows,                                     // Height
+                                        8,                                              // Bits per component
+                                        8 * _image.elemSize(),                           // Bits per pixel
+                                        _image.step[0],                                  // Bytes per row
+                                        colorSpace,                                     // Colorspace
+                                        kCGImageAlphaNone | kCGBitmapByteOrderDefault,  // Bitmap info flags
+                                        provider,                                       // CGDataProviderRef
+                                        NULL,                                           // Decode
+                                        false,                                          // Should interpolate
+                                        kCGRenderingIntentDefault);                     // Intent
+    
+    // do the copy inside of the object instantiation for retImage
+    CIImage* retImage = [[CIImage alloc]initWithCGImage:imageRef];
+    // now apply transforms to get what the original image would be inside the Core Image frame
+    CGAffineTransform transform = CGAffineTransformMakeTranslation(self.bounds.origin.x, self.bounds.origin.y);
+    retImage = [retImage imageByApplyingTransform:transform];
+    CIFilter* filt = [CIFilter filterWithName:@"CISourceAtopCompositing"
+                          withInputParameters:@{@"inputImage":retImage,@"inputBackgroundImage":self.frameInput}];
+    retImage = filt.outputImage;
     
     // clean up
     CGImageRelease(imageRef);

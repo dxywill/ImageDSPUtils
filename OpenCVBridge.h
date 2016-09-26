@@ -11,11 +11,16 @@
 
 @interface OpenCVBridge : NSObject
 
+// set the image for processing later
 -(void) setImage:(CIImage*)ciFrameImage
       withBounds:(CGRect)rect
       andContext:(CIContext*)context;
 
+//get the image raw opencv
 -(CIImage*)getImage;
+
+//get the image inside the original bounds
+-(CIImage*)getImageComposite;
 
 -(void)processImage;
 
