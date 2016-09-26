@@ -11,16 +11,13 @@
 
 @interface OpenCVBridge : NSObject
 
-+ (void)OpenCVTransferFaces:(CIFaceFeature *)faceFeature usingImage:(CIImage*)ciFrameImage andContext:(CIContext*)context;
+-(void) setImage:(CIImage*)ciFrameImage
+      withBounds:(CGRect)rect
+      andContext:(CIContext*)context;
 
-+ (CIImage*)OpenCVTransferFaceAndReturnNewImage:(CIFaceFeature *)faceFeature usingImage:(CIImage*)ciFrameImage andContext:(CIContext*)context;
+-(CIImage*)getImage;
 
-//+(void)testFaceFeature:(CIFaceFeature *)faceFeature;
-//
-//+(void)testImage:(CIImage*)ciFrameImage;
-//
-//+(void)testContext:(CIContext*)context;
-
+-(void)processImage;
 
 
 @end
