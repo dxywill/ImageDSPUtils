@@ -11,6 +11,8 @@
 
 @interface OpenCVBridge : NSObject
 
+@property (nonatomic) NSInteger processType;
+
 // set the image for processing later
 -(void) setImage:(CIImage*)ciFrameImage
       withBounds:(CGRect)rect
@@ -22,6 +24,7 @@
 //get the image inside the original bounds
 -(CIImage*)getImageComposite;
 
+// call this to perfrom processing (user controlled for better transparency)
 -(void)processImage;
 
 
