@@ -13,6 +13,7 @@
 
 @property (nonatomic) NSInteger processType;
 
+
 // set the image for processing later
 -(void) setImage:(CIImage*)ciFrameImage
       withBounds:(CGRect)rect
@@ -27,5 +28,9 @@
 // call this to perfrom processing (user controlled for better transparency)
 -(void)processImage;
 
+// for the video manager transformations
+-(void)setTransforms:(CGAffineTransform)trans;
+
+-(void)loadHaarCascadeWithFilename:(NSString*)filename;
 
 @end
