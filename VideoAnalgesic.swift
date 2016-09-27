@@ -20,6 +20,7 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
     private var devicePosition: AVCaptureDevicePosition
     private var window:UIWindow??
     var videoPreviewView:GLKView
+    var ciOrientation = 1
     private var _eaglContext:EAGLContext!
     private var ciContext:CIContext!
     private var videoPreviewViewBounds:CGRect = CGRectZero
@@ -157,9 +158,9 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
             // because the native video image from the back camera is in UIDeviceOrientationLandscapeLeft (i.e. the home button is on the right), we need to apply a clockwise 90 degree transform so that we can draw the video preview as if we were in a landscape-oriented view; if you're using the front camera and you want to have a mirrored preview (so that the user is seeing themselves in the mirror), you need to apply an additional horizontal flip (by concatenating CGAffineTransformMakeScale(-1.0, 1.0) to the rotation transform)
             
             transform = CGAffineTransformRotate(transform, CGFloat(M_PI_2))
-            //if devicePosition == AVCaptureDevicePosition.Front{
-            //    transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
-            //}
+            if devicePosition == AVCaptureDevicePosition.Front{
+                transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(-1.0, 1.0))
+            }
             videoPreviewView.transform = transform
             videoPreviewView.frame = window!!.bounds
             
@@ -280,29 +281,37 @@ class VideoAnalgesic: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AV
         
         dispatch_async(dispatch_get_main_queue()){
             
-            
             switch (UIDevice.currentDevice().orientation, self.videoDevice!.position){
             case (UIDeviceOrientation.LandscapeRight, AVCaptureDevicePosition.Back):
+                self.ciOrientation = 3
                 self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
             case (UIDeviceOrientation.LandscapeLeft, AVCaptureDevicePosition.Back):
+                self.ciOrientation = 1
                 self.transform = CGAffineTransformIdentity
             case (UIDeviceOrientation.LandscapeLeft, AVCaptureDevicePosition.Front):
+                self.ciOrientation = 3
                 self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI))
                 self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.LandscapeRight, AVCaptureDevicePosition.Front):
+                self.ciOrientation = 1
                 self.transform = CGAffineTransformIdentity
                 self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.PortraitUpsideDown, AVCaptureDevicePosition.Back):
+                self.ciOrientation = 7
                 self.transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
             case (UIDeviceOrientation.PortraitUpsideDown, AVCaptureDevicePosition.Front):
+                self.ciOrientation = 7
                 self.transform = CGAffineTransformMakeRotation(CGFloat(3*M_PI_2))
                 self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
             case (UIDeviceOrientation.Portrait, AVCaptureDevicePosition.Back):
+                self.ciOrientation = 5
                 self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
             case (UIDeviceOrientation.Portrait, AVCaptureDevicePosition.Front):
-                self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
-                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, 1.0))
+                self.ciOrientation = 5
+                self.transform = CGAffineTransformMakeRotation(CGFloat(-M_PI_2))
+                self.transform = CGAffineTransformConcat(self.transform, CGAffineTransformMakeScale(-1.0, -1.0))
             default:
+                self.ciOrientation = 5
                 self.transform = CGAffineTransformMakeRotation(CGFloat(M_PI_2))
             }
             

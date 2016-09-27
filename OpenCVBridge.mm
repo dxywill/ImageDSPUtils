@@ -25,20 +25,21 @@ using namespace cv;
 
 @implementation OpenCVBridge
 
-const int kCannyLowThreshold = 300;
-const int kFilterKernelSize = 5;
 
-#pragma mark Write Your Code Here
+
+#pragma mark ===Write Your Code Here===
+// alternatively you can subclass this class and override the process image function
 
 
 #pragma mark Define Custom Functions Here
 -(void)processImage{
     
     cv::Mat frame_gray,image_copy;
-    char text[50];
-    vector<Mat> layers;
+    const int kCannyLowThreshold = 300;
+    const int kFilterKernelSize = 5;
+    
     static uint counter = 0;
-    Scalar avgPixelIntensity;
+    
     
     switch (self.processType) {
         case 1:
@@ -69,13 +70,19 @@ const int kFilterKernelSize = 5;
             break;
             
         case 3:
+        { // fine, adding scoping to case statements to get rid of jump errors
+            char text[50];
+            Scalar avgPixelIntensity;
+            
             cvtColor(_image, image_copy, CV_BGRA2BGR); // get rid of alpha for processing
             avgPixelIntensity = cv::mean( image_copy );
             sprintf(text,"Avg. B: %.0f, G: %.0f, R: %.0f", avgPixelIntensity.val[0],avgPixelIntensity.val[1],avgPixelIntensity.val[2]);
             cv::putText(_image, text, cv::Point(0, 10), FONT_HERSHEY_PLAIN, 0.75, Scalar::all(255), 1, 2);
             break;
-            
+        }
         case 4:
+        {
+            vector<Mat> layers;
             cvtColor(_image, image_copy, CV_BGRA2BGR);
             cvtColor(image_copy, image_copy, CV_BGR2HSV);
             
@@ -91,9 +98,9 @@ const int kFilterKernelSize = 5;
             cvtColor(image_copy, image_copy, CV_HSV2BGR);
             cvtColor(image_copy, _image, CV_BGR2BGRA);
             break;
-            
+        }
         case 5:
-        {// fine, adding scoping to case statements to get rid of jump errors
+        {
             //============================================
             //threshold the image using the utsu method (optimal histogram point)
             cvtColor(_image, image_copy, COLOR_BGRA2GRAY);
@@ -136,18 +143,18 @@ const int kFilterKernelSize = 5;
             vector<vector<cv::Point> > contours; // for saving the contours
             vector<cv::Vec4i> hierarchy;
             
-            cvtColor(_image, image_copy, CV_BGRA2GRAY);
+            cvtColor(_image, frame_gray, CV_BGRA2GRAY);
             
             // Perform Canny edge detection
-            Canny(image_copy, _image,
+            Canny(frame_gray, image_copy,
                   kCannyLowThreshold,
                   kCannyLowThreshold*7,
                   kFilterKernelSize);
             
             // convert edges into connected components
-            findContours( _image, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );
+            findContours( image_copy, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );
             
-            // draw the contours to the original image
+            // draw boxes around contours in the original image
             for( int i = 0; i< contours.size(); i++ )
             {
                 cv::Rect boundingRect = cv::boundingRect(contours[i]);
@@ -164,17 +171,17 @@ const int kFilterKernelSize = 5;
             vector<vector<cv::Point> > contours; // for saving the contours
             vector<cv::Vec4i> hierarchy;
             
-            cvtColor(_image, image_copy, CV_BGRA2GRAY);
+            cvtColor(_image, frame_gray, CV_BGRA2GRAY);
             
             
             // Perform Canny edge detection
-            Canny(image_copy, _image,
+            Canny(frame_gray, image_copy,
                   kCannyLowThreshold,
                   kCannyLowThreshold*7,
                   kFilterKernelSize);
             
             // convert edges into connected components
-            findContours( _image, contours, hierarchy,
+            findContours( image_copy, contours, hierarchy,
                          CV_RETR_CCOMP,
                          CV_CHAIN_APPROX_SIMPLE,
                          cv::Point(0, 0) );
@@ -204,7 +211,7 @@ const int kFilterKernelSize = 5;
                          1, // downsample factor
                          image_copy.rows/20, // distance between centers
                          kCannyLowThreshold/2, // canny upper thresh
-                         50, // magnitude thresh for hough param space
+                         40, // magnitude thresh for hough param space
                          0, 0 ); // min/max centers
             
             /// Draw the circles detected
@@ -281,12 +288,13 @@ const int kFilterKernelSize = 5;
 
 
 -(void) setImage:(CIImage*)ciFrameImage
-      withBounds:(CGRect)faceRect
+      withBounds:(CGRect)faceRectIn
       andContext:(CIContext*)context{
     
-    
-    ciFrameImage = [ciFrameImage imageByApplyingTransform:self.transform];
+    CGRect faceRect = CGRect(faceRectIn);
     faceRect = CGRectApplyAffineTransform(faceRect, self.transform);
+    ciFrameImage = [ciFrameImage imageByApplyingTransform:self.transform];
+    
     
     //get face bounds and copy over smaller face image as CIImage
     //CGRect faceRect = faceFeature.bounds;
@@ -352,14 +360,14 @@ const int kFilterKernelSize = 5;
     
     // do the copy inside of the object instantiation for retImage
     CIImage* retImage = [[CIImage alloc]initWithCGImage:imageRef];
+    CGAffineTransform transform = CGAffineTransformMakeTranslation(self.bounds.origin.x, self.bounds.origin.y);
+    retImage = [retImage imageByApplyingTransform:transform];
     retImage = [retImage imageByApplyingTransform:self.inverseTransform];
     
     // clean up
     CGImageRelease(imageRef);
     CGDataProviderRelease(provider);
     CGColorSpaceRelease(colorSpace);
-    
-    
     
     return retImage;
 }
