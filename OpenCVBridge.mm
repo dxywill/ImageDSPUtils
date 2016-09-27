@@ -38,18 +38,20 @@ using namespace cv;
     const int kCannyLowThreshold = 300;
     const int kFilterKernelSize = 5;
     
-    static uint counter = 0;
+    
     
     
     switch (self.processType) {
         case 1:
+        {
             cvtColor( _image, frame_gray, CV_BGR2GRAY );
             bitwise_not(frame_gray, _image);
             return;
             break;
-            
+        }
         case 2:
-            
+        {
+            static uint counter = 0;
             cvtColor(_image, image_copy, CV_BGRA2BGR);
             for(int i=0;i<counter;i++){
                 for(int j=0;j<counter;j++){
@@ -68,7 +70,7 @@ using namespace cv;
             counter++;
             counter = counter>50 ? 0 : counter;
             break;
-            
+        }
         case 3:
         { // fine, adding scoping to case statements to get rid of jump errors
             char text[50];
