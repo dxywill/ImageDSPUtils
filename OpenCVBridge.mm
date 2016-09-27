@@ -44,6 +44,7 @@ const int kFilterKernelSize = 5;
         case 1:
             cvtColor( _image, frame_gray, CV_BGR2GRAY );
             bitwise_not(frame_gray, _image);
+            return;
             break;
             
         case 2:
@@ -351,13 +352,14 @@ const int kFilterKernelSize = 5;
     
     // do the copy inside of the object instantiation for retImage
     CIImage* retImage = [[CIImage alloc]initWithCGImage:imageRef];
+    retImage = [retImage imageByApplyingTransform:self.inverseTransform];
     
     // clean up
     CGImageRelease(imageRef);
     CGDataProviderRelease(provider);
     CGColorSpaceRelease(colorSpace);
     
-    retImage = [retImage imageByApplyingTransform:self.inverseTransform];
+    
     
     return retImage;
 }
