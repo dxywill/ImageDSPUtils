@@ -11,6 +11,10 @@
 #import "AVFoundation/AVFoundation.h"
 #import <opencv2/opencv.hpp>
 #import <opencv2/highgui/cap_ios.h>
+#import "GraphUtils.h"
+
+#include <queue>
+#include <vector>
 
 using namespace cv;
 
@@ -31,230 +35,121 @@ using namespace cv;
 // alternatively you can subclass this class and override the process image function
 
 
+vector<float> vect;
+
+int i = 0;
+
+int peaks = 0;
+
+NSTimeInterval timeStart = [[NSDate date] timeIntervalSince1970];
+
 #pragma mark Define Custom Functions Here
 -(void)processImage{
     
     cv::Mat frame_gray,image_copy;
-    const int kCannyLowThreshold = 300;
-    const int kFilterKernelSize = 5;
+    IplImage * canvas = nullptr;
+    vector<float> filtered;
+
+    char text[50];
+    Scalar avgPixelIntensity;
     
     
+    cvtColor(_image, image_copy, CV_BGRA2BGR); // get rid of alpha for processing
+    avgPixelIntensity = cv::mean( image_copy );
+    sprintf(text,"Avg. R: %.0f, G: %.0f, B: %.0f", avgPixelIntensity.val[0],avgPixelIntensity.val[1],avgPixelIntensity.val[2]);
+ 
+    NSTimeInterval timeEnd = [[NSDate date] timeIntervalSince1970];
+    //NSLog(@"timeEnd %f", timeEnd);
+    float timePassed = timeEnd - timeStart;
     
+    //NSLog(@"timePassed %f", timePassed);
     
-    switch (self.processType) {
-        case 1:
-        {
-            cvtColor( _image, frame_gray, CV_BGR2GRAY );
-            bitwise_not(frame_gray, _image);
-            return;
-            break;
-        }
-        case 2:
-        {
-            static uint counter = 0;
-            cvtColor(_image, image_copy, CV_BGRA2BGR);
-            for(int i=0;i<counter;i++){
-                for(int j=0;j<counter;j++){
-                    uchar *pt = image_copy.ptr(i, j);
-                    pt[0] = 255;
-                    pt[1] = 0;
-                    pt[2] = 255;
-                    
-                    pt[3] = 255;
-                    pt[4] = 0;
-                    pt[5] = 0;
-                }
+    if (timePassed <= 30) {
+        vect.push_back(avgPixelIntensity.val[0]);
+    } else {
+        vect.erase(vect.begin());
+        vect.push_back(avgPixelIntensity.val[0]);
+        
+        filtered = [self smoothFilter:vect];
+        //float bpm = [self findBPM:filtered];
+        float bpm = [self findBPM:vect];
+        
+        /*for (int i=1; i < vect.size() - 1; i++) {
+            if (vect[i] > vect[i - 1] && vect[i] > vect[i+1]) {
+                peaks++;
             }
-            cvtColor(image_copy, _image, CV_BGR2BGRA);
-            
-            counter++;
-            counter = counter>50 ? 0 : counter;
-            break;
-        }
-        case 3:
-        { // fine, adding scoping to case statements to get rid of jump errors
-            char text[50];
-            Scalar avgPixelIntensity;
-            
-            cvtColor(_image, image_copy, CV_BGRA2BGR); // get rid of alpha for processing
-            avgPixelIntensity = cv::mean( image_copy );
-            sprintf(text,"Avg. B: %.0f, G: %.0f, R: %.0f", avgPixelIntensity.val[0],avgPixelIntensity.val[1],avgPixelIntensity.val[2]);
-            cv::putText(_image, text, cv::Point(0, 10), FONT_HERSHEY_PLAIN, 0.75, Scalar::all(255), 1, 2);
-            break;
-        }
-        case 4:
-        {
-            vector<Mat> layers;
-            cvtColor(_image, image_copy, CV_BGRA2BGR);
-            cvtColor(image_copy, image_copy, CV_BGR2HSV);
-            
-            //grab  just the Hue chanel
-            cv::split(image_copy,layers);
-            
-            // shift the colors
-            cv::add(layers[0],80.0,layers[0]);
-            
-            // get back image from separated layers
-            cv::merge(layers,image_copy);
-            
-            cvtColor(image_copy, image_copy, CV_HSV2BGR);
-            cvtColor(image_copy, _image, CV_BGR2BGRA);
-            break;
-        }
-        case 5:
-        {
-            //============================================
-            //threshold the image using the utsu method (optimal histogram point)
-            cvtColor(_image, image_copy, COLOR_BGRA2GRAY);
-            cv::threshold(image_copy, image_copy, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
-            cvtColor(image_copy, _image, CV_GRAY2BGRA); //add back for display
-            break;
-        }
-        case 6:
-        {
-            //============================================
-            //do some blurring (filtering)
-            cvtColor(_image, image_copy, CV_BGRA2BGR);
-            Mat gauss = cv::getGaussianKernel(23, 17);
-            cv::filter2D(image_copy, image_copy, -1, gauss);
-            cvtColor(image_copy, _image, CV_BGR2BGRA);
-            break;
-        }
-        case 7:
-        {
-            //============================================
-            // canny edge detector
-            // Convert captured frame to grayscale
-            cvtColor(_image, image_copy, COLOR_BGRA2GRAY);
-            
-            // Perform Canny edge detection
-            Canny(image_copy, _image,
-                  kCannyLowThreshold,
-                  kCannyLowThreshold*7,
-                  kFilterKernelSize);
-            
-            // copy back for further processing
-            cvtColor(_image, _image, CV_GRAY2BGRA); //add back for display
-            break;
-        }
-        case 8:
-        {
-            //============================================
-            // contour detector with rectangle bounding
-            // Convert captured frame to grayscale
-            vector<vector<cv::Point> > contours; // for saving the contours
-            vector<cv::Vec4i> hierarchy;
-            
-            cvtColor(_image, frame_gray, CV_BGRA2GRAY);
-            
-            // Perform Canny edge detection
-            Canny(frame_gray, image_copy,
-                  kCannyLowThreshold,
-                  kCannyLowThreshold*7,
-                  kFilterKernelSize);
-            
-            // convert edges into connected components
-            findContours( image_copy, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );
-            
-            // draw boxes around contours in the original image
-            for( int i = 0; i< contours.size(); i++ )
-            {
-                cv::Rect boundingRect = cv::boundingRect(contours[i]);
-                cv::rectangle(_image, boundingRect, Scalar(255,255,255,255));
-            }
-            break;
-            
-        }
-        case 9:
-        {
-            //============================================
-            // contour detector with full bounds drawing
-            // Convert captured frame to grayscale
-            vector<vector<cv::Point> > contours; // for saving the contours
-            vector<cv::Vec4i> hierarchy;
-            
-            cvtColor(_image, frame_gray, CV_BGRA2GRAY);
-            
-            
-            // Perform Canny edge detection
-            Canny(frame_gray, image_copy,
-                  kCannyLowThreshold,
-                  kCannyLowThreshold*7,
-                  kFilterKernelSize);
-            
-            // convert edges into connected components
-            findContours( image_copy, contours, hierarchy,
-                         CV_RETR_CCOMP,
-                         CV_CHAIN_APPROX_SIMPLE,
-                         cv::Point(0, 0) );
-            
-            // draw the contours to the original image
-            for( int i = 0; i< contours.size(); i++ )
-            {
-                Scalar color = Scalar( rand()%255, rand()%255, rand()%255, 255 );
-                drawContours( _image, contours, i, color, 1, 4, hierarchy, 0, cv::Point() );
-                
-            }
-            break;
-        }
-        case 10:
-        {
-            /// Convert it to gray
-            cvtColor( _image, image_copy, CV_BGRA2GRAY );
-            
-            /// Reduce the noise
-            GaussianBlur( image_copy, image_copy, cv::Size(3, 3), 2, 2 );
-            
-            vector<Vec3f> circles;
-            
-            /// Apply the Hough Transform to find the circles
-            HoughCircles( image_copy, circles,
-                         CV_HOUGH_GRADIENT,
-                         1, // downsample factor
-                         image_copy.rows/20, // distance between centers
-                         kCannyLowThreshold/2, // canny upper thresh
-                         40, // magnitude thresh for hough param space
-                         0, 0 ); // min/max centers
-            
-            /// Draw the circles detected
-            for( size_t i = 0; i < circles.size(); i++ )
-            {
-                cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-                int radius = cvRound(circles[i][2]);
-                // circle center
-                circle( _image, center, 3, Scalar(0,255,0,255), -1, 8, 0 );
-                // circle outline
-                circle( _image, center, radius, Scalar(0,0,255,255), 3, 8, 0 );
-            }
-            break;
-        }
-        case 11:
-        {
-            // example for running Haar cascades
-            //============================================
-            // generic Haar Cascade
-            
-            cvtColor(_image, image_copy, CV_BGRA2GRAY);
-            vector<cv::Rect> objects;
-            
-            // run classifier
-            // error if this is not set!
-            self.classifier.detectMultiScale(image_copy, objects);
-            
-            // display bounding rectangles around the detected objects
-            for( vector<cv::Rect>::const_iterator r = objects.begin(); r != objects.end(); r++)
-            {
-                cv::rectangle( _image, cvPoint( r->x, r->y ), cvPoint( r->x + r->width, r->y + r->height ), Scalar(0,0,255,255));
-            }
-            //image already in the correct color space
-            break;
-        }
-            
-        default:
-            break;
-            
+        }*/
+        
+        //NSLog(@"time spent %f",(timeEnd - timeStart));
+        NSLog(@"BPM: %f", bpm);
+        peaks = 0;
     }
+    
+    
+    
+ 
+    canvas = drawFloatGraph(filtered.data(), filtered.size(), canvas, 0,255, _image.cols,180);
+    cv::Mat cvGraph = cv::cvarrToMat(canvas, true);
+
+    cvGraph.copyTo(_image);
+    cv::putText(_image, text, cv::Point(0, 100), FONT_HERSHEY_PLAIN, 0.75, Scalar::all(255), 1, 2);
+    
 }
+
+-(vector<float>) smoothFilter: (vector<float>)data {
+    
+    vector <float> filter(data.size());
+    int window = 3;
+    
+    for (int i = 0; i < data.size(); i++) {
+        float mean = 0;
+        int k = 0;
+        for (int j = i - window / 2; j < i + window /2 + 1; j++) {
+            if (j> -1 && j < data.size()) {
+                mean += data[j];
+                k++;
+            }
+        }
+        filter[i] = mean / k;
+    }
+    return filter;
+    
+}
+
+
+//REFERENCING ATHeartRate by lehn0058 on GitHub
+//https://github.com/lehn0058/ATHeartRate
+
+-(float)findBPM:(vector<float>)data{
+    
+    int count = 0;
+    
+    for(int i = 3; i < data.size()-3;/*NO INCREMENT*/){
+        if(data.at(i) > 0 &&
+           data.at(i) > data.at(i-1) &&
+           data.at(i) > data.at(i-2) &&
+           data.at(i) > data.at(i-3) &&
+           data.at(i) >= data.at(i+1) &&
+           data.at(i) >= data.at(i+2) &&
+           data.at(i) >= data.at(i+3)) {
+            count++;
+            i+=4;
+        }
+        else {
+            i++;
+        }
+    }
+    
+    //NSLog(@"PEAK COUNT: %d", count*6);
+    
+    float seconds = 30.0; //MAGIC NUMBER
+    float percentage = seconds / 60.0; //MAGIC NUMBER FOR SECONDS IN MINUTE
+    float bpm = count / percentage;
+    
+    return bpm;
+}
+
+
 
 
 #pragma mark ====Do Not Manipulate Code below this line!====
@@ -422,8 +317,6 @@ using namespace cv;
     
     return retImage;
 }
-
-
 
 
 @end
